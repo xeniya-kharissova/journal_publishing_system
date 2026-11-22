@@ -7,6 +7,7 @@ from app.api.deps import require_journal_roles, require_system_admin
 from app.core.database import get_db
 from app.core.pagination import PaginatedResponse
 from app.models.journal import JournalRole
+from app.models.manuscript import ManuscriptStatus
 from app.models.user import User
 from app.schemas.journal import (
     JournalCreateRequest,
@@ -17,7 +18,8 @@ from app.schemas.journal import (
     JournalWorkflowConfigResponse,
     JournalWorkflowConfigUpdateRequest,
 )
-from app.services import journal_service
+from app.schemas.manuscript import ManuscriptResponse
+from app.services import journal_service, workflow_service
 
 router = APIRouter(prefix="/journals", tags=["Journals & RBAC"])
 
@@ -200,3 +202,42 @@ def revoke_journal_member(
         membership_id=membership_id,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/{journal_id}/manuscripts",
+    response_model=PaginatedResponse[ManuscriptResponse],
+    summary="View journal editorial manuscript queue (Chief Editor or System Admin)",
+)
+def list_journal_manuscripts(
+    journal_id: int,
+    page: int = Query(default=1, ge=1, description="1-based page number."),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page."),
+    status_filter: ManuscriptStatus | None = Query(
+        default=None,
+        alias="status",
+        description="Optional filter by workflow status.",
+    ),
+    assigned_editor_id: int | None = Query(
+        default=None,
+        ge=1,
+        description="Optional filter by assigned Handling Editor ID.",
+    ),
+    _actor: User = Depends(require_journal_roles(JournalRole.CHIEF_EDITOR)),
+    db: Session = Depends(get_db),
+) -> PaginatedResponse[ManuscriptResponse]:
+    """Return a paginated editorial queue of submitted manuscripts in this journal."""
+    items, total = workflow_service.list_journal_manuscripts_paginated(
+        db,
+        journal_id=journal_id,
+        page=page,
+        page_size=page_size,
+        status_filter=status_filter,
+        assigned_editor_id=assigned_editor_id,
+    )
+    return PaginatedResponse[ManuscriptResponse](
+        page=page,
+        page_size=page_size,
+        total=total,
+        items=[ManuscriptResponse.model_validate(m) for m in items],
+    )

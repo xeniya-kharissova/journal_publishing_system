@@ -137,6 +137,12 @@ class Manuscript(Base):
         cascade="all, delete-orphan",
         order_by="ManuscriptVersion.version_number.asc()",
     )
+    status_history: Mapped[list["ManuscriptStatusHistory"]] = relationship(
+        "ManuscriptStatusHistory",
+        back_populates="manuscript",
+        cascade="all, delete-orphan",
+        order_by="ManuscriptStatusHistory.id.asc()",
+    )
 
 
 class ManuscriptAuthor(Base):
@@ -231,3 +237,32 @@ class ManuscriptVersion(Base):
     def extracted_text_length(self) -> int:
         """Return character count of locally extracted PDF text."""
         return len(self.extracted_text or "")
+
+
+class ManuscriptStatusHistory(Base):
+    """Immutable audit log recording every workflow state transition on a manuscript."""
+
+    __tablename__ = "manuscript_status_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    manuscript_id: Mapped[int] = mapped_column(
+        ForeignKey("manuscripts.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    from_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    to_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    changed_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+        server_default=func.now(),
+    )
+
+    manuscript: Mapped[Manuscript] = relationship("Manuscript", back_populates="status_history")
+    changed_by: Mapped[User | None] = relationship("User", foreign_keys=[changed_by_id])

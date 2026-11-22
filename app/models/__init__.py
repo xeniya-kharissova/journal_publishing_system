@@ -12,6 +12,7 @@ from app.models.manuscript import (
     Manuscript,
     ManuscriptAuthor,
     ManuscriptStatus,
+    ManuscriptStatusHistory,
     ManuscriptVersion,
 )
 from app.models.user import User
@@ -26,6 +27,7 @@ __all__ = [
     "Manuscript",
     "ManuscriptAuthor",
     "ManuscriptStatus",
+    "ManuscriptStatusHistory",
     "ManuscriptVersion",
     "User",
 ]

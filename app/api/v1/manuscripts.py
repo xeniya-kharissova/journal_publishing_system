@@ -11,12 +11,16 @@ from app.core.pagination import PaginatedResponse
 from app.models.manuscript import ManuscriptStatus
 from app.models.user import User
 from app.schemas.manuscript import (
+    AssignEditorRequest,
+    DeskRejectRequest,
     ManuscriptCreateRequest,
     ManuscriptResponse,
+    ManuscriptStatusHistoryResponse,
     ManuscriptUpdateRequest,
     ManuscriptVersionResponse,
+    WorkflowNoteRequest,
 )
-from app.services import manuscript_service
+from app.services import manuscript_service, workflow_service
 
 router = APIRouter(prefix="/manuscripts", tags=["Manuscripts & Files"])
 
@@ -198,3 +202,148 @@ def download_manuscript_version(
             "Content-Disposition": f'attachment; filename="{safe_download_name}"',
         },
     )
+
+
+@router.post(
+    "/{manuscript_id}/submit",
+    response_model=ManuscriptResponse,
+    summary="Submit a completed draft manuscript into editorial workflow",
+)
+def submit_manuscript(
+    manuscript_id: int,
+    payload: WorkflowNoteRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ManuscriptResponse:
+    """Transition a draft manuscript with an uploaded PDF to submitted status."""
+    manuscript = workflow_service.submit_manuscript(
+        db,
+        manuscript_id=manuscript_id,
+        current_user=current_user,
+        note=payload.note if payload else None,
+    )
+    return ManuscriptResponse.model_validate(manuscript)
+
+
+@router.post(
+    "/{manuscript_id}/withdraw",
+    response_model=ManuscriptResponse,
+    summary="Withdraw own manuscript prior to publication",
+)
+def withdraw_manuscript(
+    manuscript_id: int,
+    payload: WorkflowNoteRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ManuscriptResponse:
+    """Transition an author's non-published, non-rejected manuscript to withdrawn."""
+    manuscript = workflow_service.withdraw_manuscript(
+        db,
+        manuscript_id=manuscript_id,
+        current_user=current_user,
+        note=payload.note if payload else None,
+    )
+    return ManuscriptResponse.model_validate(manuscript)
+
+
+@router.get(
+    "/{manuscript_id}/status-history",
+    response_model=list[ManuscriptStatusHistoryResponse],
+    summary="View immutable status transition audit history",
+)
+def list_manuscript_status_history(
+    manuscript_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[ManuscriptStatusHistoryResponse]:
+    """Return chronological status transitions for an authorized manuscript."""
+    entries = workflow_service.list_status_history_for_user(
+        db,
+        manuscript_id=manuscript_id,
+        current_user=current_user,
+    )
+    return [ManuscriptStatusHistoryResponse.model_validate(e) for e in entries]
+
+
+@router.post(
+    "/{manuscript_id}/assign-editor",
+    response_model=ManuscriptResponse,
+    summary="Assign a Handling Editor (Chief Editor or System Admin)",
+)
+def assign_handling_editor(
+    manuscript_id: int,
+    payload: AssignEditorRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ManuscriptResponse:
+    """Assign a journal editor (handling_editor or chief_editor) to handle this manuscript."""
+    manuscript = workflow_service.assign_handling_editor(
+        db,
+        manuscript_id=manuscript_id,
+        editor_id=payload.editor_id,
+        current_user=current_user,
+    )
+    return ManuscriptResponse.model_validate(manuscript)
+
+
+@router.post(
+    "/{manuscript_id}/desk-review",
+    response_model=ManuscriptResponse,
+    summary="Move submitted manuscript into desk review",
+)
+def start_desk_review(
+    manuscript_id: int,
+    payload: WorkflowNoteRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ManuscriptResponse:
+    """Transition a submitted manuscript to desk_review (assigned Handling Editor or Chief Editor)."""
+    manuscript = workflow_service.start_desk_review(
+        db,
+        manuscript_id=manuscript_id,
+        current_user=current_user,
+        note=payload.note if payload else None,
+    )
+    return ManuscriptResponse.model_validate(manuscript)
+
+
+@router.post(
+    "/{manuscript_id}/desk-reject",
+    response_model=ManuscriptResponse,
+    summary="Desk-reject a manuscript with a documented rationale",
+)
+def desk_reject_manuscript(
+    manuscript_id: int,
+    payload: DeskRejectRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ManuscriptResponse:
+    """Transition a manuscript in desk_review to rejected with a logged rationale."""
+    manuscript = workflow_service.desk_reject_manuscript(
+        db,
+        manuscript_id=manuscript_id,
+        current_user=current_user,
+        rationale=payload.rationale,
+    )
+    return ManuscriptResponse.model_validate(manuscript)
+
+
+@router.post(
+    "/{manuscript_id}/advance-to-review",
+    response_model=ManuscriptResponse,
+    summary="Advance manuscript to peer review (under_review)",
+)
+def advance_to_under_review(
+    manuscript_id: int,
+    payload: WorkflowNoteRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ManuscriptResponse:
+    """Advance manuscript into under_review and initialize review round 1."""
+    manuscript = workflow_service.advance_to_under_review(
+        db,
+        manuscript_id=manuscript_id,
+        current_user=current_user,
+        note=payload.note if payload else None,
+    )
+    return ManuscriptResponse.model_validate(manuscript)

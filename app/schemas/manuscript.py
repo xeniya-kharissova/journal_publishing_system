@@ -197,3 +197,51 @@ class ManuscriptResponse(BaseModel):
     co_authors: list[ManuscriptAuthorResponse]
     created_at: datetime
     updated_at: datetime
+
+
+class ManuscriptStatusHistoryResponse(BaseModel):
+    """Immutable audit record of a single manuscript workflow transition."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    manuscript_id: int
+    from_status: ManuscriptStatus
+    to_status: ManuscriptStatus
+    changed_by_id: int | None
+    note: str | None
+    created_at: datetime
+
+
+class WorkflowNoteRequest(BaseModel):
+    """Optional editorial or author note accompanying a workflow transition."""
+
+    note: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("note")
+    @classmethod
+    def _clean_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+
+class DeskRejectRequest(BaseModel):
+    """Required documented rationale for desk-rejecting a manuscript."""
+
+    rationale: str = Field(..., min_length=1, max_length=4000)
+
+    @field_validator("rationale")
+    @classmethod
+    def _validate_rationale(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("rationale cannot be blank.")
+        return stripped
+
+
+class AssignEditorRequest(BaseModel):
+    """Payload for assigning a Handling Editor to a manuscript."""
+
+    editor_id: int = Field(..., ge=1)
