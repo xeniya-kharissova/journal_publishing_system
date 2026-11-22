@@ -1,6 +1,7 @@
 """SQLAlchemy ORM models registry."""
 
 from app.core.database import Base
+from app.models.decision import EditorialDecision, EditorialDecisionType
 from app.models.journal import (
     AnonymityMode,
     Journal,
@@ -26,6 +27,8 @@ from app.models.user import User
 __all__ = [
     "AnonymityMode",
     "Base",
+    "EditorialDecision",
+    "EditorialDecisionType",
     "Journal",
     "JournalMembership",
     "JournalRole",

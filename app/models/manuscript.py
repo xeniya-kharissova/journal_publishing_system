@@ -23,6 +23,7 @@ from app.models.journal import Journal
 from app.models.user import User
 
 if TYPE_CHECKING:
+    from app.models.decision import EditorialDecision
     from app.models.review import Review, ReviewInvitation
 
 
@@ -158,6 +159,12 @@ class Manuscript(Base):
         back_populates="manuscript",
         cascade="all, delete-orphan",
         order_by="Review.id.asc()",
+    )
+    decisions: Mapped[list["EditorialDecision"]] = relationship(
+        "EditorialDecision",
+        back_populates="manuscript",
+        cascade="all, delete-orphan",
+        order_by="EditorialDecision.review_round.asc()",
     )
 
 

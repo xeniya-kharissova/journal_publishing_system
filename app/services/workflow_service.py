@@ -115,9 +115,16 @@ def transition_manuscript_status(
 
     if to_status == ManuscriptStatus.SUBMITTED and manuscript.submitted_at is None:
         manuscript.submitted_at = now
-    elif to_status == ManuscriptStatus.UNDER_REVIEW and manuscript.current_review_round == 0:
-        manuscript.current_review_round = 1
-    elif to_status in {ManuscriptStatus.ACCEPTED, ManuscriptStatus.REJECTED}:
+    elif to_status == ManuscriptStatus.UNDER_REVIEW:
+        if current_status == ManuscriptStatus.REVISION_REQUESTED:
+            manuscript.current_review_round += 1
+        elif manuscript.current_review_round == 0:
+            manuscript.current_review_round = 1
+    elif to_status in {
+        ManuscriptStatus.ACCEPTED,
+        ManuscriptStatus.REVISION_REQUESTED,
+        ManuscriptStatus.REJECTED,
+    }:
         manuscript.decided_at = now
     elif to_status == ManuscriptStatus.PUBLISHED:
         manuscript.published_at = now
