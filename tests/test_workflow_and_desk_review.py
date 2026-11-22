@@ -272,6 +272,31 @@ def test_editorial_queue_editor_assignment_and_cross_journal_isolation(
     assert assigned.status_code == 200
     assert assigned.json()["assigned_editor_id"] == editor_j1["id"]
 
+    # Create a second submitted manuscript in Journal 1 that is NOT assigned to editor_j1
+    unassigned_ms = _create_draft(client, author_headers, journal_id=j1["id"], title="Unassigned Paper")
+    assert (
+        client.post(f"/api/v1/manuscripts/{unassigned_ms['id']}/submit", headers=author_headers).status_code
+        == 200
+    )
+
+    # Handling Editor in Journal 1 sees ONLY manuscripts assigned to themselves
+    editor_j1_headers = auth_headers_for(email=editor_j1["email"])
+    he_queue = client.get(
+        f"/api/v1/journals/{j1['id']}/manuscripts",
+        params={"assigned_editor_id": chief_j1["id"]},  # ignored for non-chief handling editors
+        headers=editor_j1_headers,
+    )
+    assert he_queue.status_code == 200
+    assert he_queue.json()["total"] == 1
+    assert he_queue.json()["items"][0]["id"] == submitted_ms["id"]
+
+    # Handling Editor from Journal 2 still gets 403 on Journal 1 queue
+    editor_j2_headers = auth_headers_for(email=editor_j2["email"])
+    assert (
+        client.get(f"/api/v1/journals/{j1['id']}/manuscripts", headers=editor_j2_headers).status_code
+        == 403
+    )
+
 
 def test_desk_review_advance_and_desk_reject_paths_and_config_override(
     client: TestClient,

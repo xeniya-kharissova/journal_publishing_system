@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.errors import BadRequestError, ConflictError, ForbiddenError, NotFoundError
+from app.models.decision import EditorialDecision
 from app.models.journal import AnonymityMode, JournalMembership, JournalRole
 from app.models.manuscript import Manuscript, ManuscriptStatus, ManuscriptVersion
 from app.models.review import (
@@ -543,6 +544,17 @@ def list_manuscript_reviews_for_user(
         query = query.where(Review.review_round == review_round)
     if viewer_role == "reviewer":
         query = query.where(Review.reviewer_id == current_user.id)
+    elif viewer_role == "author":
+        decided_rounds = set(
+            db.scalars(
+                select(EditorialDecision.review_round).where(
+                    EditorialDecision.manuscript_id == manuscript.id
+                )
+            ).all()
+        )
+        if not decided_rounds:
+            return []
+        query = query.where(Review.review_round.in_(decided_rounds))
 
     reviews = list(
         db.scalars(query.order_by(Review.review_round.asc(), Review.id.asc())).all()

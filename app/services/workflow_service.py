@@ -288,13 +288,28 @@ def list_journal_manuscripts_paginated(
     db: Session,
     *,
     journal_id: int,
+    current_user: User,
     page: int,
     page_size: int,
     status_filter: ManuscriptStatus | None = None,
     assigned_editor_id: int | None = None,
 ) -> tuple[list[Manuscript], int]:
-    """Return a journal's editorial manuscript queue (excluding private drafts)."""
+    """Return a journal's editorial manuscript queue (excluding private drafts).
+
+    Handling Editors who are not Chief Editors/System Admins are automatically scoped
+    to manuscripts where assigned_editor_id == current_user.id.
+    """
     journal_service.get_journal_or_404(db, journal_id)
+
+    is_chief_or_admin = current_user.is_system_admin or journal_service.has_journal_role(
+        db,
+        user=current_user,
+        journal_id=journal_id,
+        allowed_roles=[JournalRole.CHIEF_EDITOR],
+    )
+    effective_assigned_editor_id = (
+        assigned_editor_id if is_chief_or_admin else current_user.id
+    )
 
     query = select(Manuscript).where(
         Manuscript.journal_id == journal_id,
@@ -302,8 +317,8 @@ def list_journal_manuscripts_paginated(
     )
     if status_filter is not None:
         query = query.where(Manuscript.status == status_filter.value)
-    if assigned_editor_id is not None:
-        query = query.where(Manuscript.assigned_editor_id == assigned_editor_id)
+    if effective_assigned_editor_id is not None:
+        query = query.where(Manuscript.assigned_editor_id == effective_assigned_editor_id)
 
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     items = list(

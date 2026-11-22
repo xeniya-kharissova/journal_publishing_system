@@ -658,7 +658,23 @@ def test_double_anonymous_mode_zero_leakage(
         == 201
     )
 
-    # 3. Author fetches reviews -> anonymous labels only, zero reviewer identity or confidential note leakage
+    # 3. Before an editorial decision is issued, author sees no reviews for the undecided round
+    before_decision = client.get(f"/api/v1/manuscripts/{ms_id}/reviews", headers=author_headers)
+    assert before_decision.status_code == 200
+    assert before_decision.json() == []
+
+    # Editor issues a decision for round 1
+    dec = client.post(
+        f"/api/v1/manuscripts/{ms_id}/decisions",
+        headers=editor_headers,
+        json={
+            "decision": "minor_revision",
+            "decision_letter": "Please address reviewer suggestions.",
+        },
+    )
+    assert dec.status_code == 201, dec.text
+
+    # Author now fetches reviews -> anonymous labels only, zero reviewer identity or confidential note leakage
     reviews_for_author = client.get(f"/api/v1/manuscripts/{ms_id}/reviews", headers=author_headers)
     assert reviews_for_author.status_code == 200, reviews_for_author.text
     author_reviews = reviews_for_author.json()
@@ -792,6 +808,22 @@ def test_single_anonymous_and_open_modes_masking_rules(
         == 201
     )
 
+    # Before decision, author cannot see reviews yet
+    assert (
+        client.get(f"/api/v1/manuscripts/{ms_single['id']}/reviews", headers=author_headers).json()
+        == []
+    )
+
+    # Issue decision so author can read round-1 feedback
+    assert (
+        client.post(
+            f"/api/v1/manuscripts/{ms_single['id']}/decisions",
+            headers=editor_headers,
+            json={"decision": "minor_revision", "decision_letter": "Minor edits requested."},
+        ).status_code
+        == 201
+    )
+
     # Author still cannot see reviewer identity or confidential comments
     single_reviews_author = client.get(
         f"/api/v1/manuscripts/{ms_single['id']}/reviews",
@@ -847,6 +879,16 @@ def test_single_anonymous_and_open_modes_masking_rules(
                 "comments_to_author": "Transparent open review.",
                 "confidential_comments_to_editor": secret_open,
             },
+        ).status_code
+        == 201
+    )
+
+    # Issue decision so author can read open-mode round-1 feedback
+    assert (
+        client.post(
+            f"/api/v1/manuscripts/{ms_open['id']}/decisions",
+            headers=editor_headers,
+            json={"decision": "minor_revision", "decision_letter": "Minor edits requested."},
         ).status_code
         == 201
     )

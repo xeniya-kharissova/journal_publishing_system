@@ -62,13 +62,25 @@ def test_seeded_demo_users_authenticate_and_use_core_endpoints(
     assert users_resp.status_code == 200
     assert users_resp.json()["total"] == 10
 
-    # Chief Editor views editorial queue (excludes drafts)
+    # Chief Editor views full editorial queue (excludes drafts)
     queue_resp = client.get(
         f"/api/v1/journals/{journals['jcs-research']['id']}/manuscripts",
         headers=chief_headers,
     )
     assert queue_resp.status_code == 200
     assert queue_resp.json()["total"] == 3
+
+    # Handling Editor views only manuscripts assigned to themselves
+    he_queue_resp = client.get(
+        f"/api/v1/journals/{journals['jcs-research']['id']}/manuscripts",
+        headers=editor_headers,
+    )
+    assert he_queue_resp.status_code == 200
+    assert he_queue_resp.json()["total"] == 2
+    assert {m["status"] for m in he_queue_resp.json()["items"]} == {
+        "under_review",
+        "revision_requested",
+    }
 
     # Author 1 sees all 4 of their manuscripts across stages
     my_ms_resp = client.get("/api/v1/manuscripts", headers=author1_headers)
@@ -90,7 +102,12 @@ def test_seeded_demo_users_authenticate_and_use_core_endpoints(
     assert pdf_resp.status_code == 200
     assert pdf_resp.content.startswith(b"%PDF-")
 
-    # Handling Editor sees unmasked reviews + confidential comments; Author sees masked reviews
+    # Author does not see reviews for undecided under_review round yet
+    ur_author_reviews = client.get(f"/api/v1/manuscripts/{ur_id}/reviews", headers=author1_headers)
+    assert ur_author_reviews.status_code == 200
+    assert ur_author_reviews.json() == []
+
+    # Handling Editor sees unmasked reviews + confidential comments; Author sees masked reviews for decided round
     rev_id = ms_by_status["revision_requested"]["id"]
     editor_reviews = client.get(f"/api/v1/manuscripts/{rev_id}/reviews", headers=editor_headers)
     assert editor_reviews.status_code == 200

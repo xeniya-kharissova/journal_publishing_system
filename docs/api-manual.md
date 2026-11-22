@@ -97,14 +97,14 @@ Collection endpoints accept `page` (1-based, default `1`) and `page_size` (`1..1
 | `POST/PATCH /journals`, `GET/PATCH /admin/users` | No | No | No | No | No | Yes |
 | `GET/PATCH /journals/{id}/workflow-config` | No | No | No | No | Yes | Yes |
 | `GET/POST/DELETE /journals/{id}/members` | No | No | No | No | Yes | Yes |
-| `GET /journals/{id}/manuscripts` | No | No | No | No | Yes | Yes |
+| `GET /journals/{id}/manuscripts` | No | No | No | Yes (assigned only) | Yes | Yes |
 | `POST /manuscripts`, `PATCH /manuscripts/{id}`, `POST /submit`, `POST /withdraw`, `POST /resubmit` | No | Yes | No | No | No | No |
 | `GET /manuscripts/{id}`, `GET /versions`, `GET /versions/{v}/download` | No | Yes | Yes (masked if DA) | Yes | Yes | Yes |
 | `POST /manuscripts/{id}/assign-editor` | No | No | No | No | Yes | Yes |
 | `POST /desk-review`, `POST /desk-reject`, `POST /advance-to-review` | No | No | No | Yes | Yes | Yes |
 | `POST/GET /manuscripts/{id}/invitations` | No | No | No | Yes | Yes | Yes |
 | `GET /review-invitations`, `POST /accept`, `POST /decline`, `POST /review` | No | No | Invited reviewer only | No | No | No |
-| `GET /manuscripts/{id}/reviews` | No | Masked | Own review only | Full unmasked | Full unmasked | Full unmasked |
+| `GET /manuscripts/{id}/reviews` | No | Masked (decided rounds only) | Own review only | Full unmasked | Full unmasked | Full unmasked |
 | `POST /manuscripts/{id}/decisions` | No | No | No | Yes (no override) | Yes (+ override) | Yes (+ override) |
 | `GET /manuscripts/{id}/decisions` | No | Yes | No | Yes | Yes | Yes |
 

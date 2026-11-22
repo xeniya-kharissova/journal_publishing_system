@@ -207,7 +207,7 @@ def revoke_journal_member(
 @router.get(
     "/{journal_id}/manuscripts",
     response_model=PaginatedResponse[ManuscriptResponse],
-    summary="View journal editorial manuscript queue (Chief Editor or System Admin)",
+    summary="View journal editorial manuscript queue (Chief Editor, Handling Editor, or System Admin)",
 )
 def list_journal_manuscripts(
     journal_id: int,
@@ -221,15 +221,22 @@ def list_journal_manuscripts(
     assigned_editor_id: int | None = Query(
         default=None,
         ge=1,
-        description="Optional filter by assigned Handling Editor ID.",
+        description="Optional filter by assigned Handling Editor ID (Chief Editor / System Admin only).",
     ),
-    _actor: User = Depends(require_journal_roles(JournalRole.CHIEF_EDITOR)),
+    actor: User = Depends(
+        require_journal_roles(JournalRole.CHIEF_EDITOR, JournalRole.HANDLING_EDITOR)
+    ),
     db: Session = Depends(get_db),
 ) -> PaginatedResponse[ManuscriptResponse]:
-    """Return a paginated editorial queue of submitted manuscripts in this journal."""
+    """Return a paginated editorial queue of submitted manuscripts in this journal.
+
+    Chief Editors and System Admins see all non-draft manuscripts in the journal;
+    Handling Editors automatically see only manuscripts assigned to themselves.
+    """
     items, total = workflow_service.list_journal_manuscripts_paginated(
         db,
         journal_id=journal_id,
+        current_user=actor,
         page=page,
         page_size=page_size,
         status_filter=status_filter,

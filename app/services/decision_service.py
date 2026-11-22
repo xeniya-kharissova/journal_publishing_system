@@ -39,7 +39,7 @@ def _check_plagiarism_gate(
     manuscript: Manuscript,
     config: JournalWorkflowConfig,
 ) -> dict[str, Any] | None:
-    """Extension hook for plagiarism-screening quality gate (implemented in ticket 09)."""
+    """Extension hook for the plagiarism-screening quality gate (Week 2)."""
     _ = (db, manuscript, config)
     return None
 
