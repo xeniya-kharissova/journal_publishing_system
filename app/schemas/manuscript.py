@@ -173,13 +173,13 @@ class ManuscriptVersionResponse(BaseModel):
 
 
 class ManuscriptResponse(BaseModel):
-    """Full manuscript representation with ordered co-authors."""
+    """Manuscript representation with ordered co-authors (masked for double-anonymous reviewers)."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     journal_id: int
-    submitter_id: int
+    submitter_id: int | None
     assigned_editor_id: int | None
     title: str
     abstract: str

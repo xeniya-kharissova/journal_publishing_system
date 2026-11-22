@@ -89,13 +89,12 @@ def get_manuscript(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ManuscriptResponse:
-    """Return manuscript metadata and co-authors for authorized stakeholders."""
-    manuscript = manuscript_service.get_manuscript_for_user(
+    """Return anonymity-enforced manuscript metadata and co-authors for authorized stakeholders."""
+    return manuscript_service.get_manuscript_response_for_user(
         db,
         manuscript_id=manuscript_id,
         current_user=current_user,
     )
-    return ManuscriptResponse.model_validate(manuscript)
 
 
 @router.patch(
@@ -161,12 +160,11 @@ def list_manuscript_versions(
     db: Session = Depends(get_db),
 ) -> list[ManuscriptVersionResponse]:
     """Return the ordered version history for an authorized manuscript."""
-    versions = manuscript_service.list_manuscript_versions_for_user(
+    return manuscript_service.list_manuscript_version_responses_for_user(
         db,
         manuscript_id=manuscript_id,
         current_user=current_user,
     )
-    return [ManuscriptVersionResponse.model_validate(v) for v in versions]
 
 
 @router.get(
@@ -257,12 +255,11 @@ def list_manuscript_status_history(
     db: Session = Depends(get_db),
 ) -> list[ManuscriptStatusHistoryResponse]:
     """Return chronological status transitions for an authorized manuscript."""
-    entries = workflow_service.list_status_history_for_user(
+    return workflow_service.list_status_history_responses_for_user(
         db,
         manuscript_id=manuscript_id,
         current_user=current_user,
     )
-    return [ManuscriptStatusHistoryResponse.model_validate(e) for e in entries]
 
 
 @router.post(

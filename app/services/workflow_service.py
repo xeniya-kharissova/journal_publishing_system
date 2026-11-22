@@ -13,6 +13,7 @@ from app.models.manuscript import (
     ManuscriptStatusHistory,
 )
 from app.models.user import User
+from app.schemas.manuscript import ManuscriptStatusHistoryResponse
 from app.services import journal_service, manuscript_service
 
 _TERMINAL_STATUSES: frozenset[ManuscriptStatus] = frozenset(
@@ -244,13 +245,13 @@ def withdraw_manuscript(
     return manuscript_service.get_manuscript_or_404(db, manuscript.id)
 
 
-def list_status_history_for_user(
+def list_status_history_responses_for_user(
     db: Session,
     *,
     manuscript_id: int,
     current_user: User,
-) -> list[ManuscriptStatusHistory]:
-    """Return chronological status transition audit history for an authorized user."""
+) -> list[ManuscriptStatusHistoryResponse]:
+    """Return anonymity-enforced status transition audit history for an authorized user."""
     manuscript = manuscript_service.get_manuscript_or_404(db, manuscript_id)
     if not manuscript_service.can_access_manuscript(db, manuscript=manuscript, user=current_user):
         raise ForbiddenError(
@@ -259,13 +260,21 @@ def list_status_history_for_user(
             details={"manuscript_id": manuscript.id},
         )
 
-    return list(
+    entries = list(
         db.scalars(
             select(ManuscriptStatusHistory)
             .where(ManuscriptStatusHistory.manuscript_id == manuscript.id)
             .order_by(ManuscriptStatusHistory.id.asc())
         ).all()
     )
+    responses = [ManuscriptStatusHistoryResponse.model_validate(e) for e in entries]
+    if manuscript_service.should_mask_author_identity(
+        db,
+        manuscript=manuscript,
+        user=current_user,
+    ):
+        return [item.model_copy(update={"changed_by_id": None}) for item in responses]
+    return responses
 
 
 def list_journal_manuscripts_paginated(

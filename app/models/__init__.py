@@ -15,6 +15,12 @@ from app.models.manuscript import (
     ManuscriptStatusHistory,
     ManuscriptVersion,
 )
+from app.models.review import (
+    Review,
+    ReviewInvitation,
+    ReviewInvitationStatus,
+    ReviewRecommendation,
+)
 from app.models.user import User
 
 __all__ = [
@@ -29,5 +35,9 @@ __all__ = [
     "ManuscriptStatus",
     "ManuscriptStatusHistory",
     "ManuscriptVersion",
+    "Review",
+    "ReviewInvitation",
+    "ReviewInvitationStatus",
+    "ReviewRecommendation",
     "User",
 ]

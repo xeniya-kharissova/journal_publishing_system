@@ -20,18 +20,21 @@ from app.core.errors import (
     PayloadTooLargeError,
     UnsupportedMediaTypeError,
 )
-from app.models.journal import JournalRole
+from app.models.journal import AnonymityMode, JournalRole
 from app.models.manuscript import (
     Manuscript,
     ManuscriptAuthor,
     ManuscriptStatus,
     ManuscriptVersion,
 )
+from app.models.review import ReviewInvitation, ReviewInvitationStatus
 from app.models.user import User
 from app.schemas.manuscript import (
     ManuscriptAuthorInput,
     ManuscriptCreateRequest,
+    ManuscriptResponse,
     ManuscriptUpdateRequest,
+    ManuscriptVersionResponse,
 )
 from app.services import journal_service
 
@@ -114,20 +117,86 @@ def get_manuscript_or_404(db: Session, manuscript_id: int) -> Manuscript:
     return manuscript
 
 
-def can_access_manuscript(db: Session, *, manuscript: Manuscript, user: User) -> bool:
-    """Return True if user is authorized to inspect or download the manuscript."""
+def has_editorial_access(db: Session, *, manuscript: Manuscript, user: User) -> bool:
+    """Return True if user is System Admin, journal Chief Editor, or assigned Handling Editor."""
     if user.is_system_admin:
         return True
-    if manuscript.submitter_id == user.id:
-        return True
-    if manuscript.assigned_editor_id == user.id:
-        return True
-    return journal_service.has_journal_role(
+    if journal_service.has_journal_role(
         db,
         user=user,
         journal_id=manuscript.journal_id,
         allowed_roles=[JournalRole.CHIEF_EDITOR],
+    ):
+        return True
+    return manuscript.assigned_editor_id == user.id and journal_service.has_journal_role(
+        db,
+        user=user,
+        journal_id=manuscript.journal_id,
+        allowed_roles=[JournalRole.HANDLING_EDITOR, JournalRole.CHIEF_EDITOR],
     )
+
+
+def is_accepted_reviewer(db: Session, *, manuscript_id: int, user_id: int) -> bool:
+    """Return True if user holds an accepted or completed review invitation for this manuscript."""
+    invitation_id = db.scalar(
+        select(ReviewInvitation.id).where(
+            ReviewInvitation.manuscript_id == manuscript_id,
+            ReviewInvitation.reviewer_id == user_id,
+            ReviewInvitation.status.in_(
+                [
+                    ReviewInvitationStatus.ACCEPTED.value,
+                    ReviewInvitationStatus.COMPLETED.value,
+                ]
+            ),
+        )
+    )
+    return invitation_id is not None
+
+
+def should_mask_author_identity(db: Session, *, manuscript: Manuscript, user: User) -> bool:
+    """Return True when the viewer is a reviewer under double_anonymous mode."""
+    if has_editorial_access(db, manuscript=manuscript, user=user):
+        return False
+    if manuscript.submitter_id == user.id:
+        return False
+    config = journal_service.get_workflow_config(db, manuscript.journal_id)
+    return config.anonymity_mode == AnonymityMode.DOUBLE_ANONYMOUS.value
+
+
+def can_access_manuscript(db: Session, *, manuscript: Manuscript, user: User) -> bool:
+    """Return True if user is authorized to inspect or download the manuscript."""
+    if has_editorial_access(db, manuscript=manuscript, user=user):
+        return True
+    if manuscript.submitter_id == user.id:
+        return True
+    return is_accepted_reviewer(db, manuscript_id=manuscript.id, user_id=user.id)
+
+
+def project_manuscript_for_user(
+    db: Session,
+    *,
+    manuscript: Manuscript,
+    current_user: User,
+) -> ManuscriptResponse:
+    """Return a role- and anonymity-aware ManuscriptResponse for an authorized viewer."""
+    response = ManuscriptResponse.model_validate(manuscript)
+    if should_mask_author_identity(db, manuscript=manuscript, user=current_user):
+        return response.model_copy(update={"submitter_id": None, "co_authors": []})
+    return response
+
+
+def project_versions_for_user(
+    db: Session,
+    *,
+    manuscript: Manuscript,
+    versions: list[ManuscriptVersion],
+    current_user: User,
+) -> list[ManuscriptVersionResponse]:
+    """Return anonymity-aware version metadata (stripping uploader ID in double-anonymous mode)."""
+    responses = [ManuscriptVersionResponse.model_validate(v) for v in versions]
+    if should_mask_author_identity(db, manuscript=manuscript, user=current_user):
+        return [item.model_copy(update={"uploaded_by_id": None}) for item in responses]
+    return responses
 
 
 def _require_manuscript_access(db: Session, *, manuscript: Manuscript, user: User) -> None:
@@ -271,6 +340,21 @@ def get_manuscript_for_user(
     return manuscript
 
 
+def get_manuscript_response_for_user(
+    db: Session,
+    *,
+    manuscript_id: int,
+    current_user: User,
+) -> ManuscriptResponse:
+    """Return anonymity-enforced manuscript details for an authorized viewer."""
+    manuscript = get_manuscript_for_user(
+        db,
+        manuscript_id=manuscript_id,
+        current_user=current_user,
+    )
+    return project_manuscript_for_user(db, manuscript=manuscript, current_user=current_user)
+
+
 def list_manuscript_versions_for_user(
     db: Session,
     *,
@@ -287,6 +371,30 @@ def list_manuscript_versions_for_user(
             .where(ManuscriptVersion.manuscript_id == manuscript.id)
             .order_by(ManuscriptVersion.version_number.asc())
         ).all()
+    )
+
+
+def list_manuscript_version_responses_for_user(
+    db: Session,
+    *,
+    manuscript_id: int,
+    current_user: User,
+) -> list[ManuscriptVersionResponse]:
+    """Return anonymity-enforced version history for an authorized viewer."""
+    manuscript = get_manuscript_or_404(db, manuscript_id)
+    _require_manuscript_access(db, manuscript=manuscript, user=current_user)
+    versions = list(
+        db.scalars(
+            select(ManuscriptVersion)
+            .where(ManuscriptVersion.manuscript_id == manuscript.id)
+            .order_by(ManuscriptVersion.version_number.asc())
+        ).all()
+    )
+    return project_versions_for_user(
+        db,
+        manuscript=manuscript,
+        versions=versions,
+        current_user=current_user,
     )
 
 

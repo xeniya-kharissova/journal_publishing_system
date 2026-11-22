@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     JSON,
@@ -20,6 +21,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.journal import Journal
 from app.models.user import User
+
+if TYPE_CHECKING:
+    from app.models.review import Review, ReviewInvitation
 
 
 def _utcnow() -> datetime:
@@ -142,6 +146,18 @@ class Manuscript(Base):
         back_populates="manuscript",
         cascade="all, delete-orphan",
         order_by="ManuscriptStatusHistory.id.asc()",
+    )
+    review_invitations: Mapped[list["ReviewInvitation"]] = relationship(
+        "ReviewInvitation",
+        back_populates="manuscript",
+        cascade="all, delete-orphan",
+        order_by="ReviewInvitation.id.asc()",
+    )
+    reviews: Mapped[list["Review"]] = relationship(
+        "Review",
+        back_populates="manuscript",
+        cascade="all, delete-orphan",
+        order_by="Review.id.asc()",
     )
 
 
